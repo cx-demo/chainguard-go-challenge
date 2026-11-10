@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>govulncheck and Trivy correlation</title>
+<style>
+:root{--ink:#17212b;--muted:#586575;--line:#dce2e8;--panel:#fff;--page:#f3f6f9;--blue:#245b8f}
+*{box-sizing:border-box}body{margin:0;background:var(--page);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:1600px;margin:auto;padding:28px 22px 54px}h1{margin:0 0 6px;font-size:clamp(1.7rem,3vw,2.4rem)}
+.lede,.muted{color:var(--muted)}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin:18px 0}
+.card,.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}.card strong{display:block;font-size:1.45rem}
+.card span,.meta,.muted{color:var(--muted);font-size:.87rem}.toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:end;margin:16px 0}
+label{display:grid;gap:4px;font-size:.85rem;font-weight:650}input,select{min-width:180px;padding:8px;border:1px solid #bbc5d0;border-radius:6px;background:#fff;font:inherit}
+button{padding:8px 12px;border:1px solid #bbc5d0;border-radius:6px;background:#fff;color:var(--ink);font:inherit;cursor:pointer}button:hover{background:#eef3f8}
+.table-scroll{overflow:auto;border:1px solid var(--line);border-radius:8px}table{width:100%;min-width:1200px;border-collapse:collapse;background:#fff;font-size:.84rem}
+th,td{text-align:left;vertical-align:top;padding:9px 10px;border-bottom:1px solid #e8edf1;max-width:340px;overflow-wrap:anywhere}
+th{position:sticky;top:0;background:#f0f4f7;z-index:1;white-space:nowrap}tr:last-child td{border-bottom:0}
+.report-summaries{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,520px),1fr));gap:14px;margin:18px 0 28px}
+.report-summary{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px;box-shadow:0 2px 8px #1322380a;min-width:0}
+.report-summary h2{margin:0 0 4px;font-size:1.2rem}.report-summary h3{margin:14px 0 6px;font-size:.98rem}
+.summary-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:14px 0}
+.summary-metrics>div{border:1px solid var(--line);border-radius:8px;padding:10px}
+.summary-metrics strong{display:block;font-size:1.3rem}.summary-metrics span{color:var(--muted);font-size:.8rem}
+.severity-summary{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0}
+.summary-type-table{overflow:auto;border:1px solid var(--line);border-radius:7px}
+.summary-type-table table{width:100%;min-width:0;font-size:.87rem}.summary-type-table td,.summary-type-table th{padding:6px 9px}
+.image-details,.package-group{background:var(--panel);border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.image-details{margin:12px 0}.image-details>summary{cursor:pointer;padding:15px 18px;font-size:1.05rem;font-weight:700;list-style:none}
+.image-details>summary::-webkit-details-marker,.package-group>summary::-webkit-details-marker{display:none}
+.image-details>summary:after,.package-group>summary:after{content:"＋";float:right;color:var(--blue)}
+.image-details[open]>summary:after,.package-group[open]>summary:after{content:"−"}
+.image-details-body{padding:0 16px 16px;border-top:1px solid var(--line)}
+.correlation-image,.correlation-package{background:var(--panel);border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.correlation-image{margin:12px 0}.correlation-image>summary{cursor:pointer;padding:15px 18px;font-size:1.05rem;font-weight:700;list-style:none}
+.correlation-image>summary::-webkit-details-marker,.correlation-package>summary::-webkit-details-marker{display:none}
+.correlation-image>summary:after,.correlation-package>summary:after{content:"＋";float:right;color:var(--blue)}
+.correlation-image[open]>summary:after,.correlation-package[open]>summary:after{content:"−"}
+.correlation-image-body{padding:0 14px 14px;border-top:1px solid var(--line)}
+.correlation-package{margin:9px 0}.correlation-package>summary{cursor:pointer;list-style:none;padding:11px 13px;background:#eaf0f5;font-weight:650}
+.correlation-package .table-scroll{border:0;border-top:1px solid var(--line);border-radius:0}
+.correlation-package table{min-width:1450px}.correlation-package th{position:static}
+.correlation-finding[hidden],.correlation-package[hidden]{display:none}
+.report-confidence-summary{margin:8px 0 16px;padding:12px;background:#f8fafc;border:1px solid var(--line);border-radius:8px}
+.confidence-counts{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}
+.confidence-count{padding:8px 10px;background:#fff;border:1px solid var(--line);border-radius:7px}
+.confidence-count strong{display:block;font-size:1.2rem}.confidence-count span{font-size:.82rem;color:var(--muted)}
+.source-trace{margin-top:8px;font-size:.82rem}
+.source-trace summary{cursor:pointer;color:var(--blue);font-weight:650}
+.trace-path{margin-top:8px;padding:8px;background:#f8fafc;border:1px solid var(--line);border-radius:7px}
+.trace-path-title{margin:0 0 6px;font-weight:650;color:var(--muted)}
+.trace-path ol{list-style:none;padding:0;margin:0;display:grid;gap:5px}
+.trace-frame{display:flex;align-items:flex-start;gap:8px;padding:6px 8px;background:white;border:1px solid var(--line);border-radius:6px}
+.trace-frame.application-frame{border-color:#86c79b;background:#f0fdf4}
+.trace-step{display:inline-grid;place-items:center;min-width:1.55rem;height:1.55rem;border-radius:50%;background:#e5e7eb;font-size:.74rem;font-weight:700}
+.trace-frame div{display:grid;gap:2px;min-width:0}.trace-frame code{overflow-wrap:anywhere}
+.trace-location,.trace-module{font-size:.77rem;color:var(--muted);overflow-wrap:anywhere}
+.trace-arrow{margin-left:auto;color:var(--blue);font-weight:700}
+.high{background:#dcfce7;color:#166534}.moderate{background:#fef3c7;color:#854d0e}
+.limited{background:#fee2e2;color:#991b1b}.metadata-only{background:#e0e7ff;color:#3730a3}
+.unmatched{background:#e5e7eb;color:#374151}
+.package-group{margin:9px 0}.package-group>summary{cursor:pointer;list-style:none;padding:11px 13px;background:#eaf0f5;font-weight:650}
+.package-name{overflow-wrap:anywhere}.type-badge{margin-left:7px;background:#e0e7ff;color:#3730a3}
+.group-count{margin-left:8px;color:var(--muted);font-size:.84rem;font-weight:500}
+.package-group .table-scroll{border:0;border-top:1px solid var(--line);border-radius:0}
+.package-group table{min-width:1000px}.package-group th{position:static}
+.finding[hidden],.package-group[hidden]{display:none}
+.badge{display:inline-block;border-radius:20px;padding:2px 8px;font-weight:700;font-size:.78rem;white-space:nowrap}
+.CRITICAL{background:#fee2e2;color:#991b1b}.HIGH{background:#ffedd5;color:#9a3412}.MEDIUM{background:#fef3c7;color:#854d0e}.LOW{background:#dbeafe;color:#1e40af}.UNKNOWN{background:#e5e7eb;color:#374151}
+.high{background:#dcfce7;color:#166534}.moderate{background:#fef3c7;color:#854d0e}.limited{background:#fee2e2;color:#991b1b}.metadata{background:#e0e7ff;color:#3730a3}.unmatched{background:#e5e7eb;color:#374151}
+.warning{border-left:4px solid #d97706;background:#fff7ed;padding:10px 12px}a{color:#245b8f}footer{margin-top:24px;color:var(--muted);font-size:.84rem}
+@media(max-width:600px){main{padding:18px 12px}}
+</style></head><body><main>    <h1>govulncheck ↔ Trivy correlation</h1>
+    <p class="lede">Go package findings from each Trivy image report are matched against one govulncheck source scan of the shared application source. Confidence describes evidence strength, not exploitability.</p>
+    <p class="warning">The correlation includes only Trivy findings for the application binary (<code>hello-server</code>). Other Go binaries in the single-stage image, including compiler/toolchain files, remain visible in the Trivy comparison but are not source-correlated.</p>
+    <h2>Scanner vulnerability databases</h2>
+<p class="muted">Database provenance is captured with each scan. “Last updated” is the database's published update timestamp; “downloaded” is when Trivy's local cache retrieved it. Govulncheck reports the database's last-modified timestamp.</p>
+<div class="table-scroll"><table><thead><tr><th>Scanner/version</th><th>Image/artifact</th>
+<th>Database source</th><th>Database version</th><th>Last updated</th><th>Downloaded</th><th>Scan time</th></tr></thead>
+<tbody><tr><td>Trivy 0.76.2</td><td>Remediated scratch<br><span class="muted">hello-server:remediated-scratch</span></td><td>ghcr.io/aquasecurity/trivy-db:2</td><td>Schema 2</td><td>2026-11-10T19:01:23.081219346Z</td><td>2026-11-09T19:09:37.037853286Z</td><td>2026-11-09T21:14:02.811966852Z</td></tr><tr><td>Trivy 0.76.2</td><td>Remediated Chainguard Static<br><span class="muted">hello-server:remediated-chainguard</span></td><td>ghcr.io/aquasecurity/trivy-db:2</td><td>Schema 2</td><td>2026-11-10T19:01:23.081219346Z</td><td>2026-11-09T19:09:37.037853286Z</td><td>2026-11-09T21:14:02.923892831Z</td></tr>
+<tr><td>govulncheck v1.9.0<br><span class="muted">Go go1.27.4; source / symbol</span></td>
+<td>Source: <code>sources/remediated</code></td><td>https://vuln.go.dev</td>
+<td>Advisory database stream</td><td>2026-11-11T02:51:11Z</td><td>Not reported</td>
+<td>Not recorded in govulncheck JSON</td></tr></tbody></table></div>
+<p class="muted">govulncheck JSON does not include a scan timestamp. Source reachability describes <code>sources/remediated</code>, not proof of exploitability in a specific image.</p>
+<h2>Correlation by Trivy report</h2>
+<p class="muted">Each report shows its confidence summary immediately above its findings. Collapse an image report if needed, or expand a package/library group for details; filters apply independently within each image report. Confidence is correlation evidence strength, not severity.</p>
+<section class="correlation-reports" aria-label="Correlation by Trivy report"><details class="correlation-image" data-image="Remediated scratch" open>
+<summary>Remediated scratch <span class="group-count">0 findings</span>
+<span class="badge high">High 0</span> <span class="badge moderate">Moderate 0</span> <span class="badge limited">Limited 0</span> <span class="badge unmatched">Unmatched 0</span></summary>
+<div class="correlation-image-body"><div class="report-confidence-summary">
+<div class="confidence-counts"><div class="confidence-count"><strong>0</strong><span>High confidence</span></div><div class="confidence-count"><strong>0</strong><span>Moderate confidence</span></div><div class="confidence-count"><strong>0</strong><span>Limited confidence</span></div><div class="confidence-count"><strong>0</strong><span>Unmatched confidence</span></div></div>
+<p class="meta">0 application findings · 0 matched CVE IDs ·
+0 Go packages/libraries</p>
+<p class="muted">Confidence is correlation evidence strength, not vulnerability severity. Severity remains the scanner-provided value shown in each finding.</p>
+</div><div class="toolbar">
+<label>Search<input class="filter-search" type="search" placeholder="CVE, package, version, title"></label>
+<label>Confidence<select class="filter-confidence"><option value="">All confidence levels</option><option value="High">High</option><option value="Moderate">Moderate</option><option value="Limited">Limited</option><option value="Unmatched">Unmatched</option></select></label>
+<label>Severity<select class="filter-severity"><option value="">All severities</option>
+<option value="CRITICAL">CRITICAL</option><option value="HIGH">HIGH</option><option value="MEDIUM">MEDIUM</option><option value="LOW">LOW</option><option value="UNKNOWN">UNKNOWN</option></select></label>
+<label>Package/library type<select class="filter-type"><option value="">All types</option></select></label>
+<label>Reachability<select class="filter-reachability"><option value="">Any reachability</option>
+<option value="reachable">Symbol path reported</option><option value="no-symbol">No symbol path reported</option></select></label>
+<label>Fix status<select class="filter-fixed"><option value="">Any fix status</option>
+<option value="yes">Fix available</option><option value="no">No fix reported</option></select></label>
+<button type="button" class="clear-filters">Clear filters</button>
+<span class="filter-count muted"></span></div></div></details><details class="correlation-image" data-image="Remediated Chainguard Static" open>
+<summary>Remediated Chainguard Static <span class="group-count">0 findings</span>
+<span class="badge high">High 0</span> <span class="badge moderate">Moderate 0</span> <span class="badge limited">Limited 0</span> <span class="badge unmatched">Unmatched 0</span></summary>
+<div class="correlation-image-body"><div class="report-confidence-summary">
+<div class="confidence-counts"><div class="confidence-count"><strong>0</strong><span>High confidence</span></div><div class="confidence-count"><strong>0</strong><span>Moderate confidence</span></div><div class="confidence-count"><strong>0</strong><span>Limited confidence</span></div><div class="confidence-count"><strong>0</strong><span>Unmatched confidence</span></div></div>
+<p class="meta">0 application findings · 0 matched CVE IDs ·
+0 Go packages/libraries</p>
+<p class="muted">Confidence is correlation evidence strength, not vulnerability severity. Severity remains the scanner-provided value shown in each finding.</p>
+</div><div class="toolbar">
+<label>Search<input class="filter-search" type="search" placeholder="CVE, package, version, title"></label>
+<label>Confidence<select class="filter-confidence"><option value="">All confidence levels</option><option value="High">High</option><option value="Moderate">Moderate</option><option value="Limited">Limited</option><option value="Unmatched">Unmatched</option></select></label>
+<label>Severity<select class="filter-severity"><option value="">All severities</option>
+<option value="CRITICAL">CRITICAL</option><option value="HIGH">HIGH</option><option value="MEDIUM">MEDIUM</option><option value="LOW">LOW</option><option value="UNKNOWN">UNKNOWN</option></select></label>
+<label>Package/library type<select class="filter-type"><option value="">All types</option></select></label>
+<label>Reachability<select class="filter-reachability"><option value="">Any reachability</option>
+<option value="reachable">Symbol path reported</option><option value="no-symbol">No symbol path reported</option></select></label>
+<label>Fix status<select class="filter-fixed"><option value="">Any fix status</option>
+<option value="yes">Fix available</option><option value="no">No fix reported</option></select></label>
+<button type="button" class="clear-filters">Clear filters</button>
+<span class="filter-count muted"></span></div></div></details></section>
+<h2>Confidence definition</h2><section class="panel"><p>Confidence is not a vulnerability severity rating. It measures how many of four independent correlation signals agree between govulncheck and Trivy for a finding:</p>
+<ul><li><strong>Reachability:</strong> govulncheck reports a reachable source symbol path.</li>
+<li><strong>Package:</strong> the exact Go package/module name matches.</li>
+<li><strong>Version:</strong> the installed Trivy package version matches govulncheck's version for that same module.</li>
+<li><strong>CVE ID:</strong> the Trivy CVE identifier is present as the exact CVE ID in the govulncheck advisory or its aliases.</li></ul>
+<p><strong>High</strong> means 4/4 signals match. <strong>Moderate</strong> means 3/4. <strong>Limited</strong> means 1-2/4. <strong>Unmatched</strong> means 0/4. Trivy severity is an independent scanner assessment, not an input to confidence. A low-confidence result is not proof of safety, and high confidence is not proof of exploitability.</p>
+<p>Trivy OS-package rows are excluded from Go correlation. Matching uses advisory IDs and published aliases; it does not infer matches from similar-looking CVE numbers or titles. Different scanner databases, image build toolchains, and advisory data can affect results.</p></section>
+<footer>Govulncheck JSON is a stream of JSON messages. Documentation: <a href="https://pkg.go.dev/golang.org/x/vuln/cmd/govulncheck">govulncheck</a> · <a href="https://trivy.dev/latest/docs/scanner/vulnerability/">Trivy</a>.</footer>
+<script>
+for(const report of document.querySelectorAll('.correlation-image')){
+ const search=report.querySelector('.filter-search');
+ const confidence=report.querySelector('.filter-confidence');
+ const severity=report.querySelector('.filter-severity');
+ const type=report.querySelector('.filter-type');
+ const reachability=report.querySelector('.filter-reachability');
+ const fixed=report.querySelector('.filter-fixed');
+ const rows=[...report.querySelectorAll('.correlation-finding')];
+ const groups=[...report.querySelectorAll('.correlation-package')];
+ const count=report.querySelector('.filter-count');
+ function filter(){
+  let visible=0;
+  for(const row of rows){
+   const show=row.dataset.search.includes(search.value.toLowerCase())
+    &&(!confidence.value||row.dataset.confidence===confidence.value)
+    &&(!severity.value||row.dataset.severity===severity.value)
+    &&(!type.value||row.dataset.packageType===type.value)
+    &&(!reachability.value||row.dataset.reachability===reachability.value)
+    &&(!fixed.value||row.dataset.fixed===fixed.value);
+   row.hidden=!show;if(show)visible++;
+  }
+  for(const group of groups){
+   const groupRows=[...group.querySelectorAll('.correlation-finding')];
+   const visibleRows=groupRows.filter(row=>!row.hidden).length;
+   group.hidden=visibleRows===0;
+   group.querySelector('.group-count').textContent=`${visibleRows.toLocaleString()} of ${groupRows.length.toLocaleString()} findings`;
+  }
+  count.textContent=`Showing ${visible.toLocaleString()} of ${rows.length.toLocaleString()} findings`;
+ }
+ search.addEventListener('input',filter);
+ [confidence,severity,type,reachability,fixed].forEach(el=>el.addEventListener('change',filter));
+ report.querySelector('.clear-filters').addEventListener('click',()=>{
+  search.value='';confidence.value='';severity.value='';type.value='';reachability.value='';fixed.value='';filter();
+ });
+ filter();
+}
+</script>
+<footer>Generated 2026-11-09T21:22:28+00:00 · Static report; no data is sent to a server.</footer></main></body></html>

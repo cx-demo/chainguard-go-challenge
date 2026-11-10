@@ -1,0 +1,21 @@
+FROM --platform=$BUILDPLATFORM golang:1.27.4 AS builder
+
+ARG TARGETOS
+ARG TARGETARCH
+
+WORKDIR /src
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
+    go build -trimpath -ldflags="-s -w" -o /hello-server .
+
+FROM scratch
+
+COPY --from=builder /hello-server /hello-server
+
+EXPOSE 8080
+USER 65532:65532
+ENTRYPOINT ["/hello-server"]

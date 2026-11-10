@@ -1,0 +1,14 @@
+# tools, keys, and caches
+.tools/
+.cache/
+.keys/
+*.key
+scripts/__pycache__/
+
+# environment setup logs
+reports/environment/
+
+# My journal and presentation files
+assignment/journal.md
+docs/presentation/
+
